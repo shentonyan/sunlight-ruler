@@ -154,6 +154,9 @@ importers:
       streamdown:
         specifier: ^1.4.0
         version: 1.4.0(@types/react@19.2.1)(react@19.2.1)
+      suncalc:
+        specifier: ^2.0.1
+        version: 2.0.1
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
@@ -194,6 +197,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.1
         version: 19.2.1(@types/react@19.2.1)
+      '@types/suncalc':
+        specifier: ^1.9.2
+        version: 1.9.2
       '@vitejs/plugin-react':
         specifier: ^5.0.4
         version: 5.0.4(vite@7.1.9(@types/node@24.7.0)(jiti@2.6.1)(lightningcss@1.30.1)(tsx@4.20.6))
@@ -1727,6 +1733,9 @@ packages:
   '@types/serve-static@1.15.9':
     resolution: {integrity: sha512-dOTIuqpWLyl3BBXU3maNQsS4A3zuuoYRNIvYSxxhebPfXg2mzWQEPne/nlJ37yOse6uGgR386uTpdsx4D0QZWA==}
 
+  '@types/suncalc@1.9.2':
+    resolution: {integrity: sha512-ATAGBHHfA1TlE2tjfidLyTcysjoT2JHHEAmWRULh73SU9UTn++j5fqHEW16X6Y/2Li87jEQXzgu4R/OOdlDqzw==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
@@ -3207,6 +3216,9 @@ packages:
 
   stylis@4.3.6:
     resolution: {integrity: sha512-yQ3rwFWRfwNUY7H5vpU0wfdkNSnvnJinhF9830Swlaxl03zsOjCfmX0ugac+3LtK0lYSgwL/KXc8oYL3mG4YFQ==}
+
+  suncalc@2.0.1:
+    resolution: {integrity: sha512-wjujU+HpsP1TUvN3/9dFkVQQCsMZbk7PkdZsASRJR4jVPHCm9Qy0FVkFTqXfs70Ag2yheN7ZUavzCyOjhJDGxQ==}
 
   tailwind-merge@3.3.1:
     resolution: {integrity: sha512-gBXpgUm/3rp1lMZZrM/w7D8GKqshif0zAymAhbCyIt8KMe+0v9DQ7cdYLR4FHH/cKpdTXb+A/tKKU3eolfsI+g==}
@@ -4959,6 +4971,8 @@ snapshots:
       '@types/http-errors': 2.0.5
       '@types/node': 24.7.0
       '@types/send': 0.17.5
+
+  '@types/suncalc@1.9.2': {}
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -6880,6 +6894,8 @@ snapshots:
       inline-style-parser: 0.2.4
 
   stylis@4.3.6: {}
+
+  suncalc@2.0.1: {}
 
   tailwind-merge@3.3.1: {}
 
