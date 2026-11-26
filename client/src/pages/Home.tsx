@@ -4,7 +4,7 @@
  * 不把页面做成数据密集型天气面板；所有交互保持如校准一件精密仪器般克制、直接。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as SunCalc from "suncalc";
+import { getSunTimes } from "@/lib/sunTimes";
 import {
   ArrowUpRight,
   Check,
@@ -23,16 +23,16 @@ import {
   X,
 } from "lucide-react";
 
-type City = { id: string; name: string; country: string; zone: string; sunrise: number; sunset: number };
+type City = { id: string; name: string; country: string; zone: string; latitude: number; longitude: number };
 type Coordinates = { latitude: number; longitude: number; accuracy: number };
 type LocationStatus = "idle" | "requesting" | "active" | "error";
 
 const cities: City[] = [
-  { id: "shanghai", name: "上海", country: "中国", zone: "Asia/Shanghai", sunrise: 323, sunset: 1107 },
-  { id: "beijing", name: "北京", country: "中国", zone: "Asia/Shanghai", sunrise: 324, sunset: 1114 },
-  { id: "marrakesh", name: "马拉喀什", country: "摩洛哥", zone: "Africa/Casablanca", sunrise: 420, sunset: 1211 },
-  { id: "paris", name: "巴黎", country: "法国", zone: "Europe/Paris", sunrise: 428, sunset: 1240 },
-  { id: "new-york", name: "纽约", country: "美国", zone: "America/New_York", sunrise: 378, sunset: 1174 },
+  { id: "shanghai", name: "上海", country: "中国", zone: "Asia/Shanghai", latitude: 31.2304, longitude: 121.4737 },
+  { id: "beijing", name: "北京", country: "中国", zone: "Asia/Shanghai", latitude: 39.9042, longitude: 116.4074 },
+  { id: "marrakesh", name: "马拉喀什", country: "摩洛哥", zone: "Africa/Casablanca", latitude: 31.6295, longitude: -7.9811 },
+  { id: "paris", name: "巴黎", country: "法国", zone: "Europe/Paris", latitude: 48.8566, longitude: 2.3522 },
+  { id: "new-york", name: "纽约", country: "美国", zone: "America/New_York", latitude: 40.7128, longitude: -74.006 },
 ];
 
 const imageAssets = {
@@ -50,10 +50,6 @@ function cityDateParts(date: Date, zone: string) {
 
 function cityDateLabel(date: Date, zone: string) {
   return new Intl.DateTimeFormat("zh-CN", { timeZone: zone, weekday: "long", month: "long", day: "numeric" }).format(date);
-}
-
-function minutesFromDate(date: Date) {
-  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
 }
 
 function formatMinutes(minutes: number) {
@@ -116,7 +112,10 @@ export default function Home() {
   const [locationError, setLocationError] = useState("");
   const [cardOpen, setCardOpen] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
+  const pageContentRef = useRef<HTMLDivElement>(null);
+  const cardModalRef = useRef<HTMLDivElement>(null);
   const cardCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cardCloseRef = useRef<HTMLButtonElement>(null);
   const city = cities.find((item) => item.id === selectedId) ?? cities[0];
   const usingLiveLocation = Boolean(coordinates && locationStatus === "active");
 
@@ -128,20 +127,13 @@ export default function Home() {
   const details = useMemo(() => {
     const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const zone = usingLiveLocation ? browserZone : city.zone;
-    let sunrise = city.sunrise;
-    let sunset = city.sunset;
-    if (coordinates) {
-      const times = SunCalc.getTimes(now, coordinates.latitude, coordinates.longitude);
-      const possibleSunrise = times.sunrise;
-      const possibleSunset = times.sunset;
-      if (possibleSunrise && possibleSunset && !Number.isNaN(possibleSunrise.getTime()) && !Number.isNaN(possibleSunset.getTime())) {
-        sunrise = minutesFromDate(possibleSunrise);
-        sunset = minutesFromDate(possibleSunset);
-      }
-    }
+    const latitude = usingLiveLocation && coordinates ? coordinates.latitude : city.latitude;
+    const longitude = usingLiveLocation && coordinates ? coordinates.longitude : city.longitude;
+    const solarTimes = getSunTimes(now, latitude, longitude, zone) ?? { sunrise: 0, sunset: 0 };
+    const { sunrise, sunset } = solarTimes;
     const current = cityDateParts(now, zone);
     const currentMinutes = current.hour * 60 + current.minute + current.second / 60;
-    const daylightProgress = (currentMinutes - sunrise) / (sunset - sunrise);
+    const daylightProgress = (currentMinutes - sunrise) / Math.max(1, sunset - sunrise);
     const beforeSunrise = currentMinutes < sunrise;
     const afterSunset = currentMinutes >= sunset;
     const night = beforeSunrise || afterSunset;
@@ -185,12 +177,73 @@ export default function Home() {
     context.font = "500 25px -apple-system, BlinkMacSystemFont, sans-serif"; context.fillText(usingLiveLocation ? "仅在本机使用当前位置计算" : "以选定地点的今日光线为标尺", 80, 1262);
   }, [cardOpen, details, usingLiveLocation]);
 
+  useEffect(() => {
+    if (!cardOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    const pageContent = pageContentRef.current;
+    if (pageContent) pageContent.inert = true;
+    document.body.style.overflow = "hidden";
+    cardCloseRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setCardOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const modal = cardModalRef.current;
+      if (!modal) return;
+      const focusable = Array.from(modal.querySelectorAll<HTMLElement>("button:not([disabled]):not([tabindex='-1']), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])"));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (pageContent) pageContent.inert = false;
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [cardOpen]);
+
   const requestLocation = () => {
-    if (!navigator.geolocation) { setLocationStatus("error"); setLocationError("当前浏览器不支持定位服务。"); return; }
-    setLocationStatus("requesting"); setLocationError("");
+    if (!navigator.geolocation) {
+      setCoordinates(null);
+      setLocationStatus("error");
+      setLocationError("当前浏览器不支持定位服务。");
+      return;
+    }
+    setLocationStatus("requesting");
+    setLocationError("");
     navigator.geolocation.getCurrentPosition(
-      (position) => { setCoordinates({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy }); setLocationStatus("active"); setPickerOpen(false); },
-      (error) => { setLocationStatus("error"); setLocationError(error.code === error.PERMISSION_DENIED ? "你可以继续使用预设城市；定位权限未被授予。" : "暂时无法读取位置，请稍后重试。"); },
+      (position) => {
+        const nextCoordinates = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        if (!getSunTimes(new Date(), nextCoordinates.latitude, nextCoordinates.longitude, zone)) {
+          setCoordinates(null);
+          setLocationStatus("error");
+          setLocationError("当前纬度今日无法计算日出与日落，请选择预设城市。");
+          return;
+        }
+        setCoordinates(nextCoordinates);
+        setLocationStatus("active");
+        setPickerOpen(false);
+      },
+      (error) => {
+        setCoordinates(null);
+        setLocationStatus("error");
+        setLocationError(error.code === error.PERMISSION_DENIED ? "你可以继续使用预设城市；定位权限未被授予。" : "暂时无法读取位置，请稍后重试。");
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
     );
   };
@@ -215,6 +268,7 @@ export default function Home() {
   return (
     <main className={`sundial-page${details.night ? " is-night" : ""}`}>
       <div className="page-grain" aria-hidden="true" />
+      <div ref={pageContentRef}>
       <header className="topbar">
         <a className="brand" href="#观测台" aria-label="日光尺首页"><span className="brand-sigil" aria-hidden="true"><img src={imageAssets.mark} alt="" /><i /></span><span className="brand-name">日光尺</span><span className="brand-divider" /><span className="brand-subtitle">SUNLIGHT RULER</span></a>
         <div className="topbar-actions"><button className="card-open" onClick={() => { setExportMessage(""); setCardOpen(true); }}><Sparkles size={14} />制备日光卡</button><div className="topbar-meta"><span className="live-dot" /><span>{usingLiveLocation ? "真实坐标" : "今日观测"}</span><span className="meta-rule" /><span>08·21</span></div></div>
@@ -245,8 +299,9 @@ export default function Home() {
       </section>
 
       <footer className="calibration-footer"><span>{usingLiveLocation ? "以真实坐标的日出与日落为标尺" : "以当地日出与日落为标尺"}</span><span className="footer-rule" /><span>页面每秒校准</span><span className="footer-status"><i /> 已同步</span></footer>
+      </div>
 
-      {cardOpen && <div className="card-modal" role="dialog" aria-modal="true" aria-labelledby="card-title"><button className="modal-scrim" aria-label="关闭日光卡" onClick={() => setCardOpen(false)} /><section className="card-sheet"><button className="modal-close" aria-label="关闭" onClick={() => setCardOpen(false)}><X size={18} /></button><div className="card-sheet-copy"><span className="modal-eyebrow"><Sparkles size={14} /> 日光卡</span><h2 id="card-title">把此刻的光线<br />留给自己。</h2><p>{details.status}<br />以 {details.locationName} 的自然光为标尺。</p><div className="card-actions"><button className="export-primary" onClick={() => saveCard("download")}><Download size={16} />下载 PNG</button><button className="export-secondary" onClick={() => saveCard("share")}><Share2 size={16} />系统分享</button></div>{exportMessage && <p className="export-message">{exportMessage}</p>}</div><div className="canvas-wrap"><canvas ref={cardCanvasRef} className="export-canvas" aria-label="日光卡片预览" /></div></section></div>}
+      {cardOpen && <div ref={cardModalRef} className="card-modal" role="dialog" aria-modal="true" aria-labelledby="card-title"><button className="modal-scrim" tabIndex={-1} aria-label="关闭日光卡" onClick={() => setCardOpen(false)} /><section className="card-sheet"><button ref={cardCloseRef} className="modal-close" aria-label="关闭" onClick={() => setCardOpen(false)}><X size={18} /></button><div className="card-sheet-copy"><span className="modal-eyebrow"><Sparkles size={14} /> 日光卡</span><h2 id="card-title">把此刻的光线<br />留给自己。</h2><p>{details.status}<br />以 {details.locationName} 的自然光为标尺。</p><div className="card-actions"><button className="export-primary" onClick={() => saveCard("download")}><Download size={16} />下载 PNG</button><button className="export-secondary" onClick={() => saveCard("share")}><Share2 size={16} />系统分享</button></div>{exportMessage && <p className="export-message">{exportMessage}</p>}</div><div className="canvas-wrap"><canvas ref={cardCanvasRef} className="export-canvas" aria-label="日光卡片预览" /></div></section></div>}
     </main>
   );
 }
